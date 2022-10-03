@@ -1,0 +1,3 @@
+const SERVER = Game_1.default.server?.on("connection", socketConnection) || net_1.default.createServer(socketConnection);
+
+Game_1.default.server = settings.server || undefined;

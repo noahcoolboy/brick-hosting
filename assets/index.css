@@ -1,0 +1,13 @@
+.fill-width {
+    width: 100%;
+}
+
+body::-webkit-scrollbar {
+    display: none;
+}
+
+body {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    background-color: #121212;
+}
