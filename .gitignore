@@ -89,3 +89,4 @@ sw.*
 *.swp
 
 node_modules
+ecosystem.config.js
