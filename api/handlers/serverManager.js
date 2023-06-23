@@ -60,6 +60,38 @@ module.exports = function (socket, db) {
         }
     })
 
+    socket.on("edit-server", async (data) => {
+        let { id, user } = await verify(socket, data, db)
+        if(!id)
+            return
+
+        if(data.name.length < 2 || data.name.length > 30 || data.hostKey.match(/[^a-zA-Z0-9]/) || data.hostKey.length != 64) {
+            return socket.emit("edit-server", {
+                error: "Invalid information."
+            })
+        }
+
+        db.collection("users").findOneAndUpdate({ "servers.id": id }, {
+            $set: {
+                "servers.$.hostKey": data.hostKey,
+                "servers.$.name": data.name,
+            }
+        })
+    })
+
+    socket.on("delete-server", async (callback) => {
+        let { id, user } = await verify(socket, {}, db)
+
+        if (master.games[id]?.server) {
+            master.stop(id)
+        }
+
+        setTimeout(async () => {
+            await db.collection("users").findOneAndUpdate({ "servers.id": id }, { $pull: { servers: { id } } })
+            callback()
+        }, 1000)
+    })
+
     socket.on("subscribe", async (data) => {
         let { id, user } = await verify(socket, data, db)
 

@@ -108,6 +108,11 @@ export default {
             icon: "mdi-console",
             link: "/console",
           },
+          {
+            name: "Configure",
+            icon: "mdi-cog",
+            link: "/configure",
+          }
         ],
         configuration: [
           {
@@ -124,11 +129,6 @@ export default {
             name: "Sounds",
             icon: "mdi-music-note",
             link: "/sounds",
-          },
-          {
-            name: "Servers",
-            icon: "mdi-server",
-            link: "/servers",
           },
         ],
       },
