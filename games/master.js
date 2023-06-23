@@ -167,6 +167,7 @@ function start(id, options, db) {
         })
 
         fork.send("start", server)
+        audioHandler(fork, id, linkSessions)
 
         fork.on("message", (msg) => {
             if (msg.type == "ready") {
@@ -186,10 +187,6 @@ function start(id, options, db) {
             } else if (msg.type == "grpc") {
                 grpcHandler(msg.data, id, db).then(data => {
                     fork.send({ type: "grpc", data })
-                })
-            } else if (msg.type == "audio") {
-                audioHandler(msg.data, id, linkSessions, audioSessions).then(data => {
-                    fork.send({ type: "audio", data })
                 })
             }
         })
@@ -272,7 +269,6 @@ function stop(id) {
 }
 
 let linkSessions = {}
-let audioSessions = {}
 function audio(socket) {
     if (!socket.linked) {
         let code = Math.random().toString(36).substring(2, 15)

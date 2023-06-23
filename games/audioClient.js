@@ -1,4 +1,8 @@
+// audioClient.js handles the audio library for the node-hill game
+// It takes care of audio linking, syncing, and positional audio
 const crypto = require("crypto")
+const messageClient = require("./messageClient")
+const channel = new messageClient.Channel(process, "audio")
 let positional = false
 
 module.exports = {
@@ -9,139 +13,73 @@ module.exports = {
             if (!args) return caller.message("Usage: /sound <command>")
             if (caller.audioLinked) return caller.message("You are already linked to an audio session.")
 
-            let reqId = crypto.randomBytes(16).toString("hex")
-            process.send({
-                type: "audio",
-                data: {
-                    type: "link",
-                    reqId,
-                    code: args,
+            channel.send("link", args, (data) => {
+                if(data == null)
+                    return caller.message("[#ff0000]Linking timed out.")   
+                    
+                if (data.error) {
+                    return caller.message("[#ff0000]" + data.error)
                 }
-            })
 
-            let got = false
-            let handler = (data) => {
-                if (data.type == "audio" && data.data.reqId == reqId) {
-                    got = true
-                    process.removeListener("message", handler)
+                caller.message("[#00ff00]Successfully linked.")
+                caller.audioLinked = true
+                caller.audioSessionId = data.sessionId
 
-                    if (data.data.error) {
-                        return caller.message("[#ff0000]" + data.data.error)
-                    }
-
-                    caller.message("[#00ff00]Successfully linked.")
-                    caller.audioLinked = true
-                    caller.audioSessionId = data.data.sessionId
-
-                    if (positional) {
-                        process.send({
-                            type: "audio",
-                            data: {
-                                type: "position",
-                                sessionId: caller.audioSessionId,
-                                pos: [caller.position.x, caller.position.y, caller.position.z],
-                                rot: caller.rotation.z
-                            }
-                        })
-                        caller.on("moved", (newPos, newRot) => {
-                            process.send({
-                                type: "audio",
-                                data: {
-                                    type: "position",
-                                    sessionId: caller.audioSessionId,
-                                    pos: [newPos.x, newPos.y, newPos.z],
-                                    rot: newRot,
-                                }
-                            })
-                        })
-                    }
-
-                    caller.newSound = (sound) => {
-                        return new Promise((resolve, reject) => {
-                            let reqId = crypto.randomBytes(16).toString("hex")
-                            process.send({
-                                type: "audio",
-                                data: {
-                                    type: "newSound",
-                                    sound,
-                                    sessions: [caller.audioSessionId],
-                                    reqId,
-                                }
-                            })
-
-                            let handler = (data) => {
-                                if (data.type == "audio" && data.data.reqId == reqId) {
-                                    process.removeListener("message", handler)
-                                    if(data.data.error) {
-                                        return reject(new Error(data.data.error))
-                                    }
-                                    resolve()
-                                }
-                            }
-                            process.on("message", handler)
-
-                            setTimeout(() => {
-                                if (!got) {
-                                    process.removeListener("message", handler)
-                                    reject(new Error("newSound timed out."))
-                                }
-                            }, 10000);
-                        })
-                    }
-
-                    Promise.all(Object.values(Game.sounds).map(sound => caller.newSound(sound))).then(() => {
-                        caller.emit("audioReady")
+                // Send position if needed
+                if(positional) {
+                    channel.send("position", {
+                        sessionId: caller.audioSessionId,
+                        pos: [caller.position.x, caller.position.y, caller.position.z],
+                        rot: caller.rotation.z
                     })
-
-                    caller.emit("linked")
-
-                    let checkInt = setInterval(() => {
-                        let reqId = crypto.randomBytes(16).toString("hex")
-                        process.send({
-                            type: "audio",
-                            data: {
-                                type: "check",
-                                sessionId: caller.audioSessionId,
-                                reqId,
-                            }
+                    caller.on("moved", (newPos, newRot) => {
+                        // TODO: Remove moved listener when audio session is unlinked
+                        channel.send("position", {
+                            sessionId: caller.audioSessionId,
+                            pos: [newPos.x, newPos.y, newPos.z],
+                            rot: newRot,
                         })
+                    })
+                }
 
-                        let handler = (data) => {
-                            if (data.type == "audio" && data.data.reqId == reqId) {
-                                process.removeListener("message", handler)
-                                if (data.data.error) {
-                                    caller.message("[#ff0000]" + data.data.error)
-                                    caller.audioLinked = false
-                                    caller.audioSessionId = null
-                                    caller.emit("unlinked")
-                                    clearInterval(checkInt)
-                                }
-                            }
+                // Inject newSound function
+                caller.newSound = (sound) => {
+                    return new Promise((resolve, reject) => {
+                        channel.send("newSound", {
+                            sound,
+                            sessions: [caller.audioSessionId],
+                        }, (data) => {
+                            if(data.error)
+                                return reject(new Error(data.error))
+                            resolve()   
+                        }, 10000)
+                    })
+                }
+
+                // Sync all songs
+                Promise.all(Object.values(Game.sounds).map(sound => caller.newSound(sound))).then(() => {
+                    caller.emit("audioReady")
+                })
+
+                caller.emit("linked")
+
+                let checkInt = setInterval(() => {
+                    channel.send("check", caller.audioSessionId, (data) => {
+                        if(data.error) {
+                            caller.message("[#ff0000]" + data.error)
+                            caller.audioLinked = false
+                            caller.audioSessionId = null
+                            caller.emit("unlinked")
+                            clearInterval(checkInt)
                         }
-
-                        process.on("message", handler)
-                    }, 1000)
-                }
-            }
-            process.on("message", handler)
-
-            setTimeout(() => {
-                if (!got) {
-                    process.removeListener("message", handler)
-                    caller.message("[#ff0000]Linking timed out.")
-                }
-            }, 10000);
+                    })
+                }, 1000)
+            })
         })
 
         Game.on("playerLeave", player => {
             if (player.audioLinked) {
-                process.send({
-                    type: "audio",
-                    data: {
-                        type: "left",
-                        sessionId: player.audioSessionId,
-                    }
-                })
+                channel.send("left", player.audioSessionId)
             }   
         })
 
@@ -225,59 +163,33 @@ module.exports = {
                         if(!positional && this.position) {
                             positional = true
                             Game.players.filter(v => v.audioLinked).forEach(v => {
-                                process.send({
-                                    type: "audio",
-                                    data: {
-                                        type: "position",
-                                        sessionId: v.audioSessionId,
-                                        pos: [v.position.x, v.position.y, v.position.z],
-                                        rot: v.rotation.z
-                                    }
+                                channel.send("position", {
+                                    sessionId: v.audioSessionId,
+                                    pos: [v.position.x, v.position.y, v.position.z],
+                                    rot: v.rotation.z
                                 })
                             })
                             Game.players.filter(v => v.audioLinked).forEach(v => {
                                 v.on("moved", (newPos, newRot) => {
-                                    process.send({
-                                        type: "audio",
-                                        data: {
-                                            type: "position",
-                                            sessionId: caller.audioSessionId,
-                                            pos: [newPos.x, newPos.y, newPos.z],
-                                            rot: newRot,
-                                        }
+                                    channel.send("position", {
+                                        sessionId: v.audioSessionId,
+                                        pos: [newPos.x, newPos.y, newPos.z],
+                                        rot: newRot.z
                                     })
                                 })
                             })
                         }
 
-                        let reqId = crypto.randomBytes(16).toString("hex")
-                        process.send({
-                            type: "audio",
-                            data: {
-                                type: "newSound",
-                                sound: this,
-                                sessions: Game.players.filter(v => v.audioLinked).map(v => v.audioSessionId),
-                                reqId,
-                            }
+                        channel.send("newSound", {
+                            sound: this,
+                            sessions: Game.players.filter(v => v.audioLinked).map(v => v.audioSessionId)
+                        }, (d) => {
+                            if(!d)
+                                return reject(new Error("Failed to create sound."))
+                            if(d.error)
+                                return reject(new Error(d.error))
+                            resolve(this)
                         })
-
-                        let got = false
-                        let handler = (data) => {
-                            if(data.type == "audio" && data.data.reqId == reqId) {
-                                got = true
-                                process.removeListener("message", handler)
-                                resolve(this)
-                            }
-                        }
-
-                        process.on("message", handler)
-
-                        setTimeout(() => {
-                            if (!got) {
-                                process.removeListener("message", handler)
-                                reject(new Error("finalize timed out."))
-                            }
-                        }, 10000);
                     })
                 }
                 return this
@@ -286,13 +198,9 @@ module.exports = {
             play(player) {
                 if (!this.finalized) return new Error("Cannot play a sound before finalizing.")
                 if (player.audioLinked) {
-                    process.send({
-                        type: "audio",
-                        data: {
-                            type: "play",
-                            sessionId: player.audioSessionId,
-                            sound: this.id,
-                        }
+                    channel.send("play", {
+                        sessionId: player.audioSessionId,
+                        sound: this.id
                     })
                 }
             }
@@ -300,13 +208,9 @@ module.exports = {
             stop(player) {
                 if (!this.finalized) return new Error("Cannot stop a sound before finalizing.")
                 if (player.audioLinked) {
-                    process.send({
-                        type: "audio",
-                        data: {
-                            type: "stop",
-                            sessionId: player.audioSessionId,
-                            sound: this.id,
-                        }
+                    channel.send("stop", {
+                        sessionId: player.audioSessionId,
+                        sound: this.id
                     })
                 }
             }
