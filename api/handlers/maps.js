@@ -14,6 +14,15 @@ module.exports = function (socket, db) {
                 socket.emit("add-map")
                 return
             }
+            if(data.map.toString().split("\n").slice(7).filter(v => v.match(/^-?\d/)).length < 100) {
+                socket.emit("update", {
+                    id: data.id,
+                    prop: "maps.error",
+                    value: "Maps must contain at least 100 bricks"
+                })
+                socket.emit("add-map")
+                return
+            }
             if(!data.name.endsWith(".brk")) {
                 socket.emit("update", {
                     id: data.id,
