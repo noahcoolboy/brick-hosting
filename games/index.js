@@ -21,17 +21,21 @@ function getSocket(server, socketCount) {
 let int;
 process.once("message", ({ dir, map, hostKey }) => {
     process.once("message", (msg, server) => {
-        server.listen = () => { }
+        //server.listen = () => { }
 
         nh.startServer({
             local: process.env.NODE_ENV != "production",
             mapDirectory: path.join(__dirname, dir, "maps"),
             scripts: path.join(__dirname, dir, "scripts"),
             map,
-            server: server,
             hostKey,
-            postServer: false
+            postServer: false,
+            port: 42400 + Math.floor(Math.random() * 20), // Random port to be used while game is starting up
         }).then(Game => {
+            server.on("connection", Game.server._events.connection) // Add the old server's connection event to the new server
+            Game.server.close() // Close the old server
+            Game.server = server // Replace the old server with the new one
+
             Game.Sound = audioClient.init(Game)
             Game.grpc = grpcClient
             Game.MOTD = "\\c7[NOTICE]: This server is proudly hosted on Brick-Hosting.xyz."
