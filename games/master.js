@@ -168,6 +168,7 @@ function start(id, options, db) {
 
         fork.send("start", server)
         audioHandler(fork, id, linkSessions)
+        grpcHandler(fork, id, db)
 
         fork.on("message", (msg) => {
             if (msg.type == "ready") {
@@ -184,10 +185,6 @@ function start(id, options, db) {
             } else if (msg.type == "players") {
                 games[id].playerCount = msg.players.length
                 games[id].players = msg.players
-            } else if (msg.type == "grpc") {
-                grpcHandler(msg.data, id, db).then(data => {
-                    fork.send({ type: "grpc", data })
-                })
             }
         })
 

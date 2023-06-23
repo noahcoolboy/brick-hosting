@@ -1,76 +1,31 @@
-const crypto = require("crypto")
+const messageClient = require("./messageClient")
+const channel = new messageClient.Channel(process, "grpc")
 
 module.exports = {
     getSaveData(userId) {
         return new Promise((resolve, reject) => {
-            let reqId = crypto.randomBytes(16).toString("hex")
-            process.send({
-                type: "grpc",
-                data: {
-                    type: "getSaveData",
-                    userId,
-                    reqId,
-                }   
+            channel.send("getSaveData", userId, (data) => {
+                if(!data)
+                    return reject(new Error("Unable to get save data."))
+                if(data.error)
+                    return reject(new Error(data.error))
+
+                resolve(data.data || {})
             })
-    
-            let got = false
-            let handler = (data) => {
-                if(data.type == "grpc" && data.data.reqId == reqId) {
-                    got = true
-                    process.removeListener("message", handler)
-
-                    if(data.data.error) {
-                        return reject(new Error(data.data.error))
-                    }
-
-                    resolve(data.data.data || {})
-                }
-            }
-            process.on("message", handler)
-
-            setTimeout(() => {
-                if (!got) {
-                    process.removeListener("message", handler)
-                    reject(new Error("getSaveData timed out."))
-                }
-            }, 10000);
         })
     },
 
     setSaveData(userId, data) {
         return new Promise((resolve, reject) => {
-            let reqId = crypto.randomBytes(16).toString("hex")
-            process.send({
-                type: "grpc",
-                data: {
-                    type: "setSaveData",
-                    userId,
-                    reqId,
-                    data,
-                }   
+            channel.send("setSaveData", {
+                userId,
+                data
+            }, (data) => {
+                if(data.error)
+                    return reject(new Error(data.error))
+
+                resolve("OK")
             })
-    
-            let got = false
-            let handler = (data) => {
-                if(data.type == "grpc" && data.data.reqId == reqId) {
-                    got = true
-                    process.removeListener("message", handler)
-                    
-                    if(data.data.error) {
-                        return reject(new Error(data.data.error))
-                    }
-
-                    resolve("OK")
-                }
-            }
-            process.on("message", handler)
-
-            setTimeout(() => {
-                if (!got) {
-                    process.removeListener("message", handler)
-                    reject(new Error("setSaveData timed out."))
-                }
-            }, 10000);
         })
     }
 }
