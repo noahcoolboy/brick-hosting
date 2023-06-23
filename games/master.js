@@ -12,6 +12,7 @@ const phin = require("phin")
 
 const grpcHandler = require("./grpcHandler")
 const audioHandler = require("./audioHandler")
+const util = require("util")
 
 async function postServer({ hostKey, port, players }) {
     try {
@@ -25,11 +26,18 @@ async function postServer({ hostKey, port, players }) {
             const body = JSON.parse(response.body);
             if (body.error) {
                 console.warn("Failure while posting to games page:", JSON.stringify(body.error.message || body));
-                if (body.error.message === "You can only postServer once every minute")
+                if(body.error.message.host_key && body.error.message.host_key[0] == "The selected host key is invalid.") {
+                    return "host_key";
+                } else if(body.error.message == "Banned users cannot host a set") {
+                    return "banned";
+                } else if (body.error.message === "You can only postServer once every minute") {
                     return "wait";
+                }
             }
         }
-        catch (err) { }
+        catch (err) {
+            console.log("Failure while handling postServer error:", err)
+        }
     }
     catch (err) {
         console.warn("Error while posting to games page.");
@@ -50,13 +58,12 @@ function firstAvailablePort() {
 
 let games = {}
 
-function create(id) {
-    if (!fs.existsSync(path.join(__dirname, id))) {
-        fs.mkdirSync(path.join(__dirname, id))
-        fs.mkdirSync(path.join(__dirname, id, "maps"))
-        fs.mkdirSync(path.join(__dirname, id, "scripts"))
-        fs.mkdirSync(path.join(__dirname, id, "sounds"))
-    }
+async function create(id) {
+    let mkdir = util.promisify(fs.mkdir)
+    await mkdir(path.join(__dirname, id))
+    await mkdir(path.join(__dirname, id, "maps"))
+    await mkdir(path.join(__dirname, id, "scripts"))
+    await mkdir(path.join(__dirname, id, "sounds"))
 }
 
 function getGameInfo(id) {
@@ -142,7 +149,8 @@ function start(id, options, db) {
         let launched = false
 
         let fork = child_process.fork(path.join(__dirname, "index.js"), {
-            silent: true
+            silent: true,
+            windowsHide: true,
         })
 
         fork.stdout.on('data', (data) => {
@@ -198,7 +206,7 @@ function start(id, options, db) {
                     fork.kill()
                 }
             }
-        }, 5000);
+        }, 7500);
 
         fork.on("exit", (code) => {
             if (code == 200) {
@@ -235,11 +243,17 @@ function start(id, options, db) {
     games[id].startTime = Date.now()
     games[id].log("Game has been started.")
     if (process.env.NODE_ENV == "production") {
-        let wait = postServer({ hostKey: options.hostKey, port, players: games[id].players }) == "wait"
-        games[id].int = setInterval(() => {
-            if (wait) return wait = false
-            if (postServer({ hostKey: options.hostKey, port, players: games[id].players }) == "wait")
-                wait = true
+        let res = postServer({ hostKey: options.hostKey, port, players: games[id].players })
+        games[id].int = setInterval(async () => {
+            if (await res == "wait") return res = ""
+            res = await postServer({ hostKey: options.hostKey, port, players: games[id].players })
+            if(res == "banned") {
+                games[id].log("User is banned.")
+                stop(id)
+            } else if(res == "host_key") {
+                games[id].log("Host key is invalid.")
+                stop(id)
+            }
         }, 62500)
     }
 }
