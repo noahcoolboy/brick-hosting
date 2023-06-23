@@ -2,6 +2,9 @@ const crypto = require("crypto")
 const path = require("path")
 const master = require("../../games/master")
 const fs = require("fs")
+const util = require("util")
+
+let exists = util.promisify(fs.exists)
 
 module.exports = function (socket, db) {
     socket.on("add-server", async (data) => {
@@ -35,12 +38,12 @@ module.exports = function (socket, db) {
         let id;
         while(true) {
             id = crypto.randomBytes(16).toString("hex")
-            if(!fs.existsSync(path.join(__dirname, "../../games/", id))) {
+            if(!(await exists(path.join(__dirname, "../../games/", id)))) {
                 break
             }
         }
 
-        master.create(id)
+        await master.create(id)
 
         await db.collection("users").findOneAndUpdate({
             token: socket.cookie
