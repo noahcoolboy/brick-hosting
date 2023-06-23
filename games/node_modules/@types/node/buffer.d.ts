@@ -45,6 +45,7 @@
  */
 declare module 'buffer' {
     import { BinaryLike } from 'node:crypto';
+    import { ReadableStream as WebReadableStream } from 'node:stream/web';
     export const INSPECT_MAX_BYTES: number;
     export const kMaxLength: number;
     export const kStringMaxLength: number;
@@ -158,14 +159,17 @@ declare module 'buffer' {
          */
         text(): Promise<string>;
         /**
-         * Returns a new `ReadableStream` that allows the content of the `Blob` to be read.
+         * Returns a new (WHATWG) `ReadableStream` that allows the content of the `Blob` to be read.
          * @since v16.7.0
          */
-        stream(): unknown; // pending web streams types
+        stream(): WebReadableStream;
     }
     export import atob = globalThis.atob;
     export import btoa = globalThis.btoa;
     global {
+        namespace NodeJS {
+            export { BufferEncoding };
+        }
         // Buffer class
         type BufferEncoding = 'ascii' | 'utf8' | 'utf-8' | 'utf16le' | 'ucs2' | 'ucs-2' | 'base64' | 'base64url' | 'latin1' | 'binary' | 'hex';
         type WithImplicitCoercion<T> =
@@ -2205,7 +2209,7 @@ declare module 'buffer' {
          * **For code running using Node.js APIs, converting between base64-encoded strings**
          * **and binary data should be performed using `Buffer.from(str, 'base64')` and`buf.toString('base64')`.**
          * @since v15.13.0
-         * @deprecated Use `Buffer.from(data, 'base64')` instead.
+         * @legacy Use `Buffer.from(data, 'base64')` instead.
          * @param data The Base64-encoded input string.
          */
         function atob(data: string): string;
@@ -2221,7 +2225,7 @@ declare module 'buffer' {
          * **For code running using Node.js APIs, converting between base64-encoded strings**
          * **and binary data should be performed using `Buffer.from(str, 'base64')` and`buf.toString('base64')`.**
          * @since v15.13.0
-         * @deprecated Use `buf.toString('base64')` instead.
+         * @legacy Use `buf.toString('base64')` instead.
          * @param data An ASCII (Latin1) string.
          */
         function btoa(data: string): string;
