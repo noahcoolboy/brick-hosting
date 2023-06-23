@@ -30,10 +30,11 @@ class Channel extends EventEmitter {
 
     // When we send a message
     send(subtype, data, callback, timeout = 1000) {
+        let id = genId()
         this.socket.send({
             type: this.type,
             subtype,
-            id: genId(),
+            id,
             data,
         })
 
