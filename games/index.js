@@ -34,6 +34,7 @@ process.once("message", ({ dir, map, hostKey }) => {
         }).then(Game => {
             Game.Sound = audioClient.init(Game)
             Game.grpc = grpcClient
+            Game.MOTD = "\\c7[NOTICE]: This server is proudly hosted on Brick-Hosting.xyz."
 
             Game.on("playerJoin", player => {
                 process.send({ type: "players", players: Game.players.map(v => v.validationToken) })
@@ -54,7 +55,7 @@ process.once("message", ({ dir, map, hostKey }) => {
                 if (Game.players.length == 0) {
                     int = setTimeout(async () => {
                         process.exit(200)
-                    }, 1000 * 60 * 15)
+                    }, 1000 * 60 * 5)
                 }
             })
 
