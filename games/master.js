@@ -245,7 +245,7 @@ function start(id, options, db) {
                 if (!fork.killed) {
                     games[id].log("Game did not launch in time and has been shut down.")
                     games[id].log("Please check for any infinite loops.")
-                    fork.kill()
+                    stop(id)
                 }
             }
         }, 7500);
