@@ -258,7 +258,7 @@ function start(id, options, db) {
                 if (code != null) {
                     games[id].log("Game has shut down or crashed.")
                 }
-                server.close()
+                stop(id)
             }
         })
 
