@@ -66,5 +66,7 @@ process.once("message", ({ map, hostKey, dir, setId }, netServer) => {
         const setData = await Game.getSetData(setId)
         Game.setData = setData
         Game.emit("setDataLoaded")
+        
+        process.title = `node BHost: ${setData.name} (${setId})`
     })
 })
