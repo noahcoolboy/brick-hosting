@@ -91,7 +91,8 @@ export default {
               this.uploading = false;
               this.file = null;
               if(this.$store.state.serverStatus.maps.mapList.length == 1) {
-                this.map = this.$store.state.serverStatus.maps.mapList[0];
+                this.$store.state.serverStatus.maps.selected = this.$store.state.serverStatus.maps.mapList[0];
+                this.setMap();
               }
             });
           };
