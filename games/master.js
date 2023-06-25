@@ -12,6 +12,7 @@ const phin = require("phin")
 
 const grpcHandler = require("./grpcHandler")
 const audioHandler = require("./audioHandler")
+const messageClient = require("./messageClient")
 const util = require("util")
 
 async function postServer({ hostKey, port, players }) {
@@ -26,9 +27,9 @@ async function postServer({ hostKey, port, players }) {
             const body = JSON.parse(response.body);
             if (body.error) {
                 console.warn("Failure while posting to games page:", JSON.stringify(body.error.message || body));
-                if(body.error.message.host_key && body.error.message.host_key[0] == "The selected host key is invalid.") {
+                if (body.error.message.host_key && body.error.message.host_key[0] == "The selected host key is invalid.") {
                     return "host_key";
-                } else if(body.error.message == "Banned users cannot host a set") {
+                } else if (body.error.message == "Banned users cannot host a set") {
                     return "banned";
                 } else if (body.error.message === "You can only postServer once every minute") {
                     return "wait";
@@ -98,6 +99,12 @@ function getGameInfo(id) {
 }
 
 function start(id, options, db) {
+    // Options object:
+    // {
+    //    hostKey: string,
+    //    map: string,
+    // }
+
     if (!games[id]) {
         games[id] = new Proxy({
             server: null,
@@ -129,6 +136,7 @@ function start(id, options, db) {
     let server = net.createServer((socket) => {
         // Buffer out the data while starting
 
+        // This object contains the socket object, as well as the data which had been sent up until the server was started
         let startBuffer = {
             socket,
             buffer: Buffer.alloc(0),
@@ -137,14 +145,24 @@ function start(id, options, db) {
             startBuffer.buffer = Buffer.concat([startBuffer.buffer, data])
         }
         socket.on('data', handler)
+        socket.once('data', () => {
+            // Send chat packet as a notice
+            let notice = "Brick-Hosting Notice: Please wait while the game starts..."
+            socket.write(Buffer.concat([
+                Buffer.from([((notice.length + 1) + 1) * 2 + 1, 0x06]),
+                Buffer.from(notice + "\0", "ascii"),
+            ]))
+        })
 
-        if (!games[id].startBuffer) {
+        if (!games[id].startBuffer) { // Checks if a player is already attempting to connect
             games[id].startBuffer = [startBuffer]
         } else {
             games[id].startBuffer.push(startBuffer)
             return
         }
 
+        // TODO: Don't launch the game if it is already being launched
+        // This can happen when a second player connects while the first player is still connecting
         games[id].sleep = false
         let launched = false
 
@@ -161,32 +179,42 @@ function start(id, options, db) {
             games[id].log(data.toString().trim().split("\n"))
         })
 
+        let ch = new messageClient.Channel(fork, "main")
+
+        // Pass the game options to the fork
+        // We cannot use messageClient here as we need to send the
+        // net.Server object using a separate sendHandle property
         fork.send({
             dir: id,
-            ...options
+            ...options,
+        }, server)
+
+        // Wait for the node-hill instance to be ready to receive connections
+        ch.once("ready", () => {
+            launched = true
+
+            // Empty the connection buffer
+            // We will spoof the packets that had been sent to the server manager while the game was starting
+            // This is because the authentication packets were sent before the game was ready to receive them
+            ch.send("socketCount", games[id].startBuffer.length)
+            for (let startBuffer of games[id].startBuffer) {
+                // NodeJS doesn't like sending buffers over IPC, so we convert it to a base64 string
+                fork.send(startBuffer.buffer.toString("base64"), startBuffer.socket)
+                startBuffer.socket.removeListener('data', handler)
+            }
+            delete games[id].startBuffer
         })
 
-        fork.send("start", server)
+        ch.on("visit", () => {
+            emitter.emit("visit", id)
+        })
+        ch.on("players", validationTokens => {
+            games[id].players = validationTokens
+            games[id].playerCount = validationTokens.length
+        })
+
         audioHandler(fork, id, linkSessions)
         grpcHandler(fork, id, db)
-
-        fork.on("message", (msg) => {
-            if (msg.type == "ready") {
-                launched = true
-                fork.send(games[id].startBuffer.length)
-                for (let buffer of games[id].startBuffer) {
-                    fork.send("socket", buffer.socket)
-                    fork.send(buffer.buffer.toString("base64"))
-                    buffer.socket.removeListener('data', handler)
-                }
-                delete games[id].startBuffer
-            } else if (msg.type == "visit") {
-                emitter.emit("visit", id)
-            } else if (msg.type == "players") {
-                games[id].playerCount = msg.players.length
-                games[id].players = msg.players
-            }
-        })
 
         setTimeout(() => {
             if (!launched) {
@@ -241,10 +269,10 @@ function start(id, options, db) {
         games[id].int = setInterval(async () => {
             if (await res == "wait") return res = ""
             res = await postServer({ hostKey: options.hostKey, port, players: games[id].players })
-            if(res == "banned") {
+            if (res == "banned") {
                 games[id].log("User is banned.")
                 stop(id)
-            } else if(res == "host_key") {
+            } else if (res == "host_key") {
                 games[id].log("Host key is invalid.")
                 stop(id)
             }
