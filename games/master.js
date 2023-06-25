@@ -148,6 +148,9 @@ function start(id, options, db) {
         }
     }
 
+    if(!options.map)
+        return games[id].log("No map specified")
+
     let port = firstAvailablePort()
     let server = net.createServer((socket) => {
         // Buffer out the data while starting
