@@ -34,6 +34,8 @@ async function postServer({ hostKey, port, players }) {
                 } else if (body.error.message === "You can only postServer once every minute") {
                     return "wait";
                 }
+            } else {
+                return body.set_id || 1
             }
         }
         catch (err) {
@@ -201,6 +203,7 @@ function start(id, options, db) {
         fork.send({
             dir: id,
             ...options,
+            setId: games[id].setId || 1,
         }, server)
 
         // Wait for the node-hill instance to be ready to receive connections
@@ -280,6 +283,8 @@ function start(id, options, db) {
     games[id].log("Game has been started.")
     if (process.env.NODE_ENV == "production") {
         let res = postServer({ hostKey: options.hostKey, port, players: games[id].players })
+        if(typeof res == "number")
+            games[id].setId = res
         games[id].int = setInterval(async () => {
             if (await res == "wait") return res = ""
             res = await postServer({ hostKey: options.hostKey, port, players: games[id].players })
@@ -289,7 +294,8 @@ function start(id, options, db) {
             } else if (res == "host_key") {
                 games[id].log("Host key is invalid.")
                 stop(id)
-            }
+            } else if(typeof res == "number")
+                games[id].setId = res
         }, 62500)
     }
 }
