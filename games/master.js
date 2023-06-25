@@ -180,6 +180,9 @@ function start(id, options, db) {
             return
         }
 
+        if(games[id].fork) // The game should be handling the socket but this event can still fire
+            return
+
         // TODO: Don't launch the game if it is already being launched
         // This can happen when a second player connects while the first player is still connecting
         games[id].sleep = false
@@ -254,6 +257,7 @@ function start(id, options, db) {
             if (code == 200) {
                 games[id].log("Game has been put to sleep by brick hosting.")
                 games[id].sleep = true
+                games[id].fork = null
             } else {
                 if (code != null) {
                     games[id].log("Game has shut down or crashed.")
