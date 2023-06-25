@@ -180,13 +180,28 @@ function start(id, options, db) {
             return
         }
 
-        if(games[id].fork) // The game should be handling the socket but this event can still fire
+        if(games[id].fork) {
+            let ch = new messageClient.Channel(games[id].fork, "main")
+            let handler = () => {
+                ch.send("socketCount", 1)
+                games[id].fork.send(startBuffer.buffer.toString("base64"), startBuffer.socket)
+                startBuffer.socket.removeListener('data', handler)
+            }
+            if(!games[id].launched) {
+                ch.once("ready", handler)
+            } else {
+                handler()
+            }
+            // Sometimes, this listener catches the socket connection and not the game
+            // So we will pass the socket to the game for it to handle the rest
+            
             return
+        }
 
         // TODO: Don't launch the game if it is already being launched
         // This can happen when a second player connects while the first player is still connecting
         games[id].sleep = false
-        let launched = false
+        games[id].launched = false
 
         let fork = child_process.fork(path.join(__dirname, "index.js"), {
             silent: true,
@@ -214,7 +229,7 @@ function start(id, options, db) {
 
         // Wait for the node-hill instance to be ready to receive connections
         ch.once("ready", () => {
-            launched = true
+            games[id].launched = true
 
             // Empty the connection buffer
             // We will spoof the packets that had been sent to the server manager while the game was starting
@@ -240,7 +255,7 @@ function start(id, options, db) {
         grpcHandler(fork, id, db)
 
         setTimeout(() => {
-            if (!launched) {
+            if (!games[id].launched) {
                 games[id].startBuffer.forEach(b => {
                     b.socket.removeListener('data', handler)
                     b.socket.end()

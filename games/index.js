@@ -51,7 +51,7 @@ process.once("message", ({ map, hostKey, dir, setId }, netServer) => {
         })
 
         ch.send("ready")
-        ch.once("socketCount", (socketCount) => {
+        ch.on("socketCount", (socketCount) => {
             let handler = (data, socket) => {
                 netServer.emit("connection", socket)
                 socket.push(Buffer.from(data, "base64"))
