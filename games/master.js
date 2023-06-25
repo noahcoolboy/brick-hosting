@@ -105,6 +105,20 @@ function start(id, options, db) {
     //    map: string,
     // }
 
+    // The game object tracks the following properties
+    // server: The server object, which listens for connections while the game is asleep
+    // startTime: The time at which the game was started, used to calculate uptime
+    // logs: The last 25 lines of stdout from the game
+    // startBuffer: An array of objects containing the socket object and the data which had been sent up until the server was started
+    // sleep: Whether the game is asleep or not
+    // playerCount: The number of players in the game
+    // players: An array of player objects, containing the player validation tokens
+    // map: The map which the game is currently running
+    // scripts: An array of scripts which the game is currently running
+    // sounds: An array of sounds which the game is currently running
+    // fork: The child_process object which is running the game
+    // int: postServer interval ID
+
     if (!games[id]) {
         games[id] = new Proxy({
             server: null,
@@ -233,6 +247,7 @@ function start(id, options, db) {
         fork.on("exit", (code) => {
             if (code == 200) {
                 games[id].log("Game has been put to sleep by brick hosting.")
+                games[id].sleep = true
             } else {
                 if (code != null) {
                     games[id].log("Game has shut down or crashed.")
@@ -257,8 +272,7 @@ function start(id, options, db) {
     server.listen(port)
 
     server.on("close", () => {
-        ports.splice(ports.indexOf(port), 1)
-        games[id].server = null
+        ports.splice(ports.indexOf(port), 1) // Free up the port
     })
 
     games[id].server = server
@@ -281,15 +295,18 @@ function start(id, options, db) {
 }
 
 function stop(id) {
-    if (games[id] && games[id].server) {
-        if (games[id].fork && !games[id].fork.killed) {
+    if (games[id]) {
+        try { // FIXME: Sometimes the fork does not get killed properly
             games[id].fork.kill()
-        }
+        } catch(e) {}
         games[id].fork = null
-        games[id].server.close()
+        try {
+            games[id].server.close()
+        } catch(e) {}
         games[id].server = null
+
         games[id].log("Game has been stopped.")
-        clearInterval(games[id].int)
+        clearInterval(games[id].int) // Remove postServer interval
     }
 }
 
