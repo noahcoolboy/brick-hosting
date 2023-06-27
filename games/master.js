@@ -173,14 +173,9 @@ function start(id, options, db) {
             ]))
         })
 
-        if (!games[id].startBuffer) { // Checks if a player is already attempting to connect
-            games[id].startBuffer = [startBuffer]
-        } else {
-            games[id].startBuffer.push(startBuffer)
-            return
-        }
-
         if(games[id].fork) {
+            // Sometimes, this listener catches the socket connection and not the game
+            // So we will pass the socket to the game for it to handle the rest
             let ch = new messageClient.Channel(games[id].fork, "main")
             let handler = () => {
                 ch.send("socketCount", 1)
@@ -192,10 +187,14 @@ function start(id, options, db) {
             } else {
                 handler()
             }
-            // Sometimes, this listener catches the socket connection and not the game
-            // So we will pass the socket to the game for it to handle the rest
-            
             return
+        } else {
+            if (!games[id].startBuffer) { // Checks if a player is already attempting to connect
+                games[id].startBuffer = [startBuffer]
+            } else {
+                games[id].startBuffer.push(startBuffer)
+                return
+            }
         }
 
         // TODO: Don't launch the game if it is already being launched
