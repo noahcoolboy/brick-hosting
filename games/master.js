@@ -148,7 +148,7 @@ function start(id, options, db) {
         }
     }
 
-    if(!options.map)
+    if (!options.map)
         return games[id].log("No map specified")
 
     let port = firstAvailablePort()
@@ -173,20 +173,13 @@ function start(id, options, db) {
             ]))
         })
 
-        if(games[id].fork && games[id].launched) {
+        if (games[id].fork && games[id].launched) {
             // Sometimes, this listener catches the socket connection and not the game
             // So we will pass the socket to the game for it to handle the rest
             let ch = new messageClient.Channel(games[id].fork, "main")
-            let handler = () => {
-                ch.send("socketCount", 1)
-                games[id].fork.send(startBuffer.buffer.toString("base64"), startBuffer.socket)
-                startBuffer.socket.removeListener('data', handler)
-            }
-            if(!games[id].launched) {
-                ch.once("ready", handler)
-            } else {
-                handler()
-            }
+            ch.send("socketCount", 1)
+            games[id].fork.send(startBuffer.buffer.toString("base64"), startBuffer.socket)
+            startBuffer.socket.removeListener('data', handler)
             return
         } else {
             if (!games[id].startBuffer) { // Checks if a player is already attempting to connect
@@ -304,7 +297,7 @@ function start(id, options, db) {
     games[id].log("Game has been started.")
     if (process.env.NODE_ENV == "production") {
         let res = postServer({ hostKey: options.hostKey, port, players: games[id].players })
-        if(typeof res == "number")
+        if (typeof res == "number")
             games[id].setId = res
         games[id].int = setInterval(async () => {
             if (await res == "wait") return res = ""
@@ -315,7 +308,7 @@ function start(id, options, db) {
             } else if (res == "host_key") {
                 games[id].log("Host key is invalid.")
                 stop(id)
-            } else if(typeof res == "number")
+            } else if (typeof res == "number")
                 games[id].setId = res
         }, 62500)
     }
@@ -325,11 +318,11 @@ function stop(id) {
     if (games[id]) {
         try { // FIXME: Sometimes the fork does not get killed properly
             games[id].fork.kill()
-        } catch(e) {}
+        } catch (e) { }
         games[id].fork = null
         try {
             games[id].server.close()
-        } catch(e) {}
+        } catch (e) { }
         games[id].server = null
 
         games[id].log("Game has been stopped.")
