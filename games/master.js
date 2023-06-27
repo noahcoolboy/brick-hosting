@@ -173,7 +173,7 @@ function start(id, options, db) {
             ]))
         })
 
-        if(games[id].fork) {
+        if(games[id].fork && games[id].launched) {
             // Sometimes, this listener catches the socket connection and not the game
             // So we will pass the socket to the game for it to handle the rest
             let ch = new messageClient.Channel(games[id].fork, "main")
